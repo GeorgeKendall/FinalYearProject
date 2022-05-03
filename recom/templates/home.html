@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div id="app" class="container-fluid">
+    
+    <template v-if="to_show === 'RECOMMEND'">
+    <!-- SEARCH BAR SECTION -->
+        <div>
+            <button @click="to_show=''">Return to all movies</button>
+        </div>
+    <!-- END SECTION -->
+
+    <div class="row">
+    <!-- SECTION TO DISPLAY FOCUS & RECOMS -->
+        <div id="focus_left" class="col-md-6">
+            <div id="focus_movie">
+            </div>
+        </div>
+        <div id="focus_right" class="col-md-6">
+            <p><h1>[[ focus_mov.title ]]</h1><br>Genre : [[ focus_mov.genre]]</p>
+            <p>[[ focus_mov.overview]]</p>
+            <hr>
+            <p>
+                Directed by: [[ focus_mov.director ]]<br><br>
+                Cast:<br>[[ focus_mov.s1 ]]<br>[[ focus_mov.s2 ]]<br>[[ focus_mov.s3 ]]<br>[[ focus_mov.s4 ]]
+            </p>
+        </div>
+    </div>
+    <hr> 
+    <div class="row">
+        <h4>Top Recommendations for "[[ focus_mov.title ]]" ...</h4>
+    </div>
+    <div class="row" id="RECOMS">    
+        <div id="recom_section" class="grid_container">
+            <div v-for="(mov) in recoms">
+                <div id="recom_item" class="grid_item" @click="mov_by_title(mov.title); getRecoms(mov.title);">
+                    <p>[[ mov.title ]]</p>
+                    <img :src="mov.poster_path">
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- END SECTION -->
+    </template>
+    
+    <template v-else-if="to_show === 'loading'">
+        <div>
+            <p>LOADING...</p>
+        </div>
+    </template>
+
+    <template v-else>
+    <!-- SECTION TO DISPLAY GRID OF ALL MOVIES -->
+        <div>
+            <div class="search">
+                <div id="fetch">
+                    <input type="text" placeholder="enter movie title here" id="search_item" />
+                    <button id="search" @click="getPoster(true); to_show='loading';">Find</button>
+                </div>
+            </div>
+            <ul class="grid_container">
+                <div v-for="(mov) in movs" id="test">
+                    <li class="grid_item" @click="mov_by_title(mov.title); getRecoms(mov.title);">
+                        <p>[[ mov.title ]]</p>
+                        <img :src="mov.poster_path" alt="">
+                    </li>
+                </div>
+            </ul>
+        </div>
+    <!-- END SECTION -->
+    </template>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+
+    let app = Vue.createApp({
+        delimiters: ['[[', ']]'],
+        data(){
+            return{
+                movs: [],
+                recoms: [],
+                focus_mov: {
+                    poster_path: "",
+                    title: "",
+                    genre: "",
+                    overview: "",
+                    director: "",
+                    s1: "",
+                    s2: "",
+                    s3: "",
+                    s4: "",
+                    soup: "",
+                },
+                to_show:"",
+            }
+        },
+        created(){
+            to_show='ORIGINAL';
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            fetch("{% url 'get_all' %}", {headers})
+            .then(async response => {
+                const data = await response.json();
+                this.movs = data.movs;
+                if (!response.ok) {
+                    const error = (data && data.message) || response.statusText;
+                    return Promise.reject(error);
+                }
+            })
+            .catch(error => {
+                this.errorMessage = error;
+                console.error("Error: ", error)
+            });
+        },
+        methods: {
+            updateFocus(response){
+                console.log(response['poster_path']);
+                this.focus_mov.poster_path = response['poster_path'];
+                this.focus_mov.title = response['title'];
+                this.focus_mov.genre = response['genre'];
+                this.focus_mov.overview = response['overview'];
+                this.focus_mov.director = response['director'];
+                this.focus_mov.s1 = response['s1'];
+                this.focus_mov.s2 = response['s2'];
+                this.focus_mov.s3 = response['s3'];
+                this.focus_mov.s4 = response['s4'];
+                this.focus_mov.soup = response['soup'];
+                console.log(this.focus_mov);
+            },
+            mov_by_title(title){
+                result = {};
+                $.ajax({
+                    type: 'GET',
+                    url: "{% url 'get_mov' %}",
+                    data: {"title": title},
+                    async: false,
+                    success: function(response){
+                        // console.log(response['poster_path'])
+                        Object.assign(result, response) // copy complex datatype ..yum..
+                    },
+                    error: function(xhr){
+                        console.log("issue...")
+                    },
+                })
+                this.updateFocus(result);
+                this.getPoster(false);
+            },
+            getPoster(search){
+                if(!search){
+                    var film = this.focus_mov.title;
+                } else {
+                    var film = $('#search_item').val();
+                    console.log("searching...")
+                    // check if in DICT
+                    $.ajax({
+                        type: 'GET',
+                        url: "{% url 'check_exist' %}",
+                        data: {"title": film},
+                        async: false,
+                        statusCode: {
+                            500: function(){
+                                // movie not in dict
+                                // console.log("404 not found yum")
+                            },
+                            302: function(){
+                                // movie in dict
+                                // console.log("302 found it")
+                            }
+                        }
+                    })
+                    $body.removeClass("loading");
+                }
+                // Now have relevant lookup name
+                $('#focus_movie').html('<div class="alert"><strong>Loading...</strong></div>');
+                $.getJSON("https://api.themoviedb.org/3/search/movie?api_key=15d2ea6d0dc1d476efbca3eba2b9bbfb&query="+film+"&callback=?",function(json){
+                    if(json != "Nothing Found."){
+                        // console.log(json);
+                        $('#focus_movie').html('<img class="" id="POSTER" src=\"http://image.tmdb.org/t/p/w500/'+json.results[0].poster_path+'\" class=\"img-responsive\" >');       
+                    } else {
+                        $.getJSON("https://api.themoviedb.org/3/search/movie?api_key=15d2ea6d0dc1d476efbca3eba2b9bbfb&query=goonies&callback=?", function(json){
+                            // console.log(json);
+                            $('#focus_movie').html('<p>Lookup issue...</p>');
+                        });
+                    }
+                });
+                return false;
+            },  
+            getRecoms(title){ßÍ
+                results = {};
+                $.ajax({
+                    type: 'GET',
+                    url: "{% url 'get_recom' %}",
+                    data: {"title": title},
+                    async: false,
+                    success: function(response){
+                        Object.assign(results, response);
+                    },
+                    error: function(xhr){
+                        console.log("issue...")
+                    },
+                })
+                this.recoms = results['recom'];
+                console.log(this.recoms)
+                this.to_show='RECOMMEND';
+            },  
+        }
+    },)
+    let vm = app.mount("#app")
+</script>
+<style>
+    #app.loading .modal{
+        overflow: hidden;
+    }
+    #app.loading .modal{
+        display: block;
+    }
+    .grid_container{
+        display: grid;
+        grid-template-columns: 25% 25% 25% 25%;
+        padding-left: 0.8%;
+        list-style: none;
+    }
+    .grid_item{
+        border: 1px solid black;
+        height: 100%;
+        width: 100%;
+        background-color: lightgray;
+    }
+    #test{
+        margin-bottom: 5%;
+        padding-right: 5%;
+    }
+    #focus_left{
+        position: relative;
+    }
+    #POSTER{
+        max-width: 100%;
+    }   
+    #RECOMS > #recom_section{
+        float: left;
+        width: 100%;
+    }
+    #RECOMS{
+        overflow: auto;
+    }
+    #recom_section{
+        display: grid;
+        grid-template-columns: 25% 25% 25% 25%;
+    }
+</style>
+{% endblock %}
