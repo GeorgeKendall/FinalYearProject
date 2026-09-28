@@ -14,5 +14,3 @@ ALSO - the ddump_soup.csv file is compressed in /data as the filesize was too la
 before use.
 
 Install all libraries necessary from requirements.txt
-
-:)
